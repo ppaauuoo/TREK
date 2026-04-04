@@ -19,11 +19,11 @@ export function success<T>(data: T): ServiceResult<T> {
 }
 
 
-export function mapDbError(error: unknown, fallbackMessage: string): ServiceError {
-    if (error instanceof Error && /unique|constraint/i.test(error.message)) {
+export function mapDbError(error: Error, fallbackMessage: string): ServiceError {
+    if (error && /unique|constraint/i.test(error.message)) {
         return fail('Resource already exists', 409);
     }
-    return fail(fallbackMessage, 500);
+    return fail(error.message, 500);
 }
 
 
