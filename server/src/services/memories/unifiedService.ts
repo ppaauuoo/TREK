@@ -1,5 +1,5 @@
 import { db, canAccessTrip } from '../../db/database';
-import { notifyTripMembers } from '../notifications';
+import { send } from '../notificationService';
 import { broadcast } from '../../websocket';
 import {
   ServiceResult,
@@ -290,17 +290,12 @@ async function _notifySharedTripPhotos(
   if (added <= 0) return fail('No photos shared, skipping notifications', 200);
 
   try {
-    const actorRow = db.prepare('SELECT username FROM users WHERE id = ?').get(actorUserId) as { username: string | null };
+    const actorRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(actorUserId) as { username: string | null, email: string | null };
 
     const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
 
     
-    //send({ event: 'photos_shared', actorId: authReq.user.id, scope: 'trip', targetId: Number(tripId), params: { trip: tripInfo?.title || 'Untitled', actor: authReq.user.email, count: String(added), tripId: String(tripId) } }).catch(() => {});
-    await notifyTripMembers(Number(tripId), actorUserId, 'photos_shared', {
-      trip: tripInfo?.title || 'Untitled',
-      actor: actorRow?.username || 'Unknown',
-      count: String(added),
-    });
+    send({ event: 'photos_shared', actorId: actorUserId, scope: 'trip', targetId: Number(tripId), params: { trip: tripInfo?.title || 'Untitled', actor: actorRow?.email || 'Unknown', count: String(added), tripId: String(tripId) } }).catch(() => {});
     return success(undefined);
   } catch {
     return fail('Failed to send notifications', 500);
