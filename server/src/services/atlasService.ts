@@ -371,6 +371,32 @@ export function markCountryVisited(userId: number, code: string): void {
 
 export function unmarkCountryVisited(userId: number, code: string): void {
   db.prepare('DELETE FROM visited_countries WHERE user_id = ? AND country_code = ?').run(userId, code);
+  db.prepare('DELETE FROM visited_regions WHERE user_id = ? AND country_code = ?').run(userId, code);
+}
+
+// ── Mark / unmark region ────────────────────────────────────────────────────
+
+export function listManuallyVisitedRegions(userId: number): { region_code: string; region_name: string; country_code: string }[] {
+  return db.prepare(
+    'SELECT region_code, region_name, country_code FROM visited_regions WHERE user_id = ? ORDER BY created_at DESC'
+  ).all(userId) as { region_code: string; region_name: string; country_code: string }[];
+}
+
+export function markRegionVisited(userId: number, regionCode: string, regionName: string, countryCode: string): void {
+  db.prepare('INSERT OR IGNORE INTO visited_regions (user_id, region_code, region_name, country_code) VALUES (?, ?, ?, ?)').run(userId, regionCode, regionName, countryCode);
+  // Auto-mark parent country if not already visited
+  db.prepare('INSERT OR IGNORE INTO visited_countries (user_id, country_code) VALUES (?, ?)').run(userId, countryCode);
+}
+
+export function unmarkRegionVisited(userId: number, regionCode: string): void {
+  const region = db.prepare('SELECT country_code FROM visited_regions WHERE user_id = ? AND region_code = ?').get(userId, regionCode) as { country_code: string } | undefined;
+  db.prepare('DELETE FROM visited_regions WHERE user_id = ? AND region_code = ?').run(userId, regionCode);
+  if (region) {
+    const remaining = db.prepare('SELECT COUNT(*) as count FROM visited_regions WHERE user_id = ? AND country_code = ?').get(userId, region.country_code) as { count: number };
+    if (remaining.count === 0) {
+      db.prepare('DELETE FROM visited_countries WHERE user_id = ? AND country_code = ?').run(userId, region.country_code);
+    }
+  }
 }
 
 // ── Sub-national region resolution ────────────────────────────────────────
@@ -450,9 +476,18 @@ export async function getVisitedRegions(userId: number): Promise<{ regions: Reco
     }
   }
 
-  const result: Record<string, { code: string; name: string; placeCount: number }[]> = {};
+  const result: Record<string, { code: string; name: string; placeCount: number; manuallyMarked?: boolean }[]> = {};
   for (const [country, regions] of Object.entries(regionMap)) {
     result[country] = [...regions.values()];
+  }
+
+  // Merge manually marked regions
+  const manualRegions = listManuallyVisitedRegions(userId);
+  for (const r of manualRegions) {
+    if (!result[r.country_code]) result[r.country_code] = [];
+    if (!result[r.country_code].find(x => x.code === r.region_code)) {
+      result[r.country_code].push({ code: r.region_code, name: r.region_name, placeCount: 0, manuallyMarked: true });
+    }
   }
 
   return { regions: result };

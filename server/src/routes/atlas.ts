@@ -6,6 +6,8 @@ import {
   getCountryPlaces,
   markCountryVisited,
   unmarkCountryVisited,
+  markRegionVisited,
+  unmarkRegionVisited,
   getVisitedRegions,
   getRegionGeo,
   listBucketList,
@@ -53,6 +55,20 @@ router.post('/country/:code/mark', (req: Request, res: Response) => {
 router.delete('/country/:code/mark', (req: Request, res: Response) => {
   const userId = (req as AuthRequest).user.id;
   unmarkCountryVisited(userId, req.params.code.toUpperCase());
+  res.json({ success: true });
+});
+
+router.post('/region/:code/mark', (req: Request, res: Response) => {
+  const userId = (req as AuthRequest).user.id;
+  const { name, country_code } = req.body;
+  if (!name || !country_code) return res.status(400).json({ error: 'name and country_code are required' });
+  markRegionVisited(userId, req.params.code.toUpperCase(), name, country_code.toUpperCase());
+  res.json({ success: true });
+});
+
+router.delete('/region/:code/mark', (req: Request, res: Response) => {
+  const userId = (req as AuthRequest).user.id;
+  unmarkRegionVisited(userId, req.params.code.toUpperCase());
   res.json({ success: true });
 });
 
